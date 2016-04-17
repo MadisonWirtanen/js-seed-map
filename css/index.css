@@ -1,0 +1,9 @@
+.blank {
+           height: 100px;
+       }
+input[type="file"]{
+    display:none;
+}
+.hiddenInput{
+  display:none;
+}
