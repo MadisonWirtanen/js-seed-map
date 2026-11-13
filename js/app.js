@@ -39,20 +39,45 @@
     if (type) el.classList.add(type === 'error' ? 'is-error' : 'is-ok');
   }
 
-  // 兼容不支持 Blob.prototype.arrayBuffer 的浏览器（旧版 Safari / 部分内置 WebView）
-  function readBytes(file) {
+  // 读取本地文件字节
+  // - 优先 FileReader（兼容性最好）
+  // - 文件仍被写入（如下载未完成）或被占用时会抛 NotReadableError，稍后重试
+  function readOnce(file) {
     return new Promise(function (resolve, reject) {
+      if (typeof FileReader === 'function') {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(new Uint8Array(reader.result)); };
+        reader.onerror = function () { reject(reader.error || new Error('无法读取文件')); };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
       if (file && typeof file.arrayBuffer === 'function') {
         file.arrayBuffer().then(function (ab) {
           resolve(new Uint8Array(ab));
         }, reject);
         return;
       }
-      var reader = new FileReader();
-      reader.onload = function () { resolve(new Uint8Array(reader.result)); };
-      reader.onerror = function () { reject(reader.error || new Error('无法读取文件')); };
-      reader.readAsArrayBuffer(file);
+      reject(new Error('当前浏览器不支持读取本地文件'));
     });
+  }
+
+  function readBytes(file, attempt) {
+    attempt = attempt || 1;
+    return readOnce(file).catch(function (err) {
+      if (attempt < 3) {
+        return new Promise(function (r) { setTimeout(r, 180 * attempt); }).then(function () {
+          return readBytes(file, attempt + 1);
+        });
+      }
+      throw err;
+    });
+  }
+
+  function readErrorText(err) {
+    if (err && err.name === 'NotReadableError') {
+      return '文件可能仍在下载、被其他程序占用，或位于网络/云盘路径，请稍后重试或复制到本地磁盘后重新选择';
+    }
+    return err && err.message ? err.message : '未知错误';
   }
 
   function baseName(name) {
@@ -221,7 +246,7 @@
       refreshComposeUI();
     }).catch(function (err) {
       console.error(err);
-      toast('读取图片失败：' + (err && err.message ? err.message : '未知错误'), true);
+      toast('读取图片失败：' + readErrorText(err), true);
     });
   }
 
@@ -648,7 +673,7 @@
     }).catch(function (err) {
       console.error(err);
       extractLoading.hidden = true;
-      toast('读取文件失败：' + (err && err.message ? err.message : '未知错误'), true);
+      toast('读取文件失败：' + readErrorText(err), true);
     });
   }
 
