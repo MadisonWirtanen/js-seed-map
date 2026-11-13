@@ -1,5 +1,7 @@
 # 图种工坊 · Seed Archive
 
+在线使用：**https://seedmap.003153.xyz**
+
 把任意文件封进一张图片里的纯前端工具：打开是照片，改后缀即可解压出里面的内容。
 
 原项目：[CasparGX/js-seed-map](https://github.com/CasparGX/js-seed-map)，本版本对前端与功能进行了完整重写。
