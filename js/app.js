@@ -39,6 +39,22 @@
     if (type) el.classList.add(type === 'error' ? 'is-error' : 'is-ok');
   }
 
+  // 兼容不支持 Blob.prototype.arrayBuffer 的浏览器（旧版 Safari / 部分内置 WebView）
+  function readBytes(file) {
+    return new Promise(function (resolve, reject) {
+      if (file && typeof file.arrayBuffer === 'function') {
+        file.arrayBuffer().then(function (ab) {
+          resolve(new Uint8Array(ab));
+        }, reject);
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () { resolve(new Uint8Array(reader.result)); };
+      reader.onerror = function () { reject(reader.error || new Error('无法读取文件')); };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   function baseName(name) {
     var s = String(name || '').replace(/\\/g, '/');
     var i = s.lastIndexOf('/');
@@ -183,8 +199,7 @@
       toast('请选择一张图片作为封面', true);
       return;
     }
-    file.arrayBuffer().then(function (ab) {
-      var bytes = new Uint8Array(ab);
+    readBytes(file).then(function (bytes) {
       var info = Seed.sniffImage(bytes);
       if (!info) {
         toast('无法识别这张图片的格式', true);
@@ -204,7 +219,10 @@
       };
       resetResult();
       refreshComposeUI();
-    }).catch(function () { toast('读取图片失败', true); });
+    }).catch(function (err) {
+      console.error(err);
+      toast('读取图片失败：' + (err && err.message ? err.message : '未知错误'), true);
+    });
   }
 
   function clearCover() {
@@ -301,8 +319,8 @@
 
     tick().then(function () {
       return Promise.all(compose.items.map(function (item) {
-        return item.file.arrayBuffer().then(function (ab) {
-          return { name: item.path, data: new Uint8Array(ab) };
+        return readBytes(item.file).then(function (bytes) {
+          return { name: item.path, data: bytes };
         });
       }));
     }).then(function (files) {
@@ -621,8 +639,8 @@
     $('extractFileName').replaceChildren(icon('#i-file'), document.createTextNode(file.name));
     extractLoading.hidden = false;
 
-    file.arrayBuffer().then(function (ab) {
-      extract.buf = new Uint8Array(ab);
+    readBytes(file).then(function (bytes) {
+      extract.buf = bytes;
       extract.image = Seed.sniffImage(extract.buf);
       extract.region = Seed.findZip(extract.buf);
       extractLoading.hidden = true;
@@ -630,7 +648,7 @@
     }).catch(function (err) {
       console.error(err);
       extractLoading.hidden = true;
-      toast('读取文件失败', true);
+      toast('读取文件失败：' + (err && err.message ? err.message : '未知错误'), true);
     });
   }
 
